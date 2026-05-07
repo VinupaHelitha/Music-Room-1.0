@@ -1,0 +1,25 @@
+{
+  "name": "music-room-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Music Room - Spotify & YouTube Music sharing platform",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.18.0",
+    "socket.io-client": "^4.7.2",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.1.1",
+    "terser": "^5.46.2",
+    "vite": "^5.0.2"
+  }
+}

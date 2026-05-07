@@ -1,0 +1,64 @@
+.lyrics-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lyrics-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.lyrics-header h4 {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+}
+
+.lyrics-header p {
+  margin: 3px 0;
+  opacity: 0.9;
+  font-size: 14px;
+}
+
+.lyrics-source {
+  font-size: 12px !important;
+  opacity: 0.7 !important;
+  margin-top: 8px !important;
+}
+
+.lyrics-content {
+  padding: 20px;
+  max-height: 600px;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #333;
+}
+
+.lyrics-line {
+  margin: 10px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lyrics-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.lyrics-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.lyrics-content::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 10px;
+}
+
+.lyrics-content::-webkit-scrollbar-thumb:hover {
+  background: #5568d3;
+}

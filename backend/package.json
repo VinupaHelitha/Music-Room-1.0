@@ -1,0 +1,39 @@
+{
+  "name": "music-room-backend",
+  "version": "1.0.0",
+  "description": "Backend for Music Room - Spotify & YouTube Music sharing platform",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "build": "cd ../frontend && npm install && npm run build",
+    "dev": "nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "music",
+    "spotify",
+    "youtube-music",
+    "lyrics"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.4.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "iso-639-1": "^2.1.15",
+    "jsonwebtoken": "^9.0.0",
+    "nodemailer": "^6.9.0",
+    "pg": "^8.20.0",
+    "socket.io": "^4.5.0",
+    "spotify-web-api-node": "^5.0.2",
+    "uuid": "^9.0.0",
+    "yt-search": "^2.13.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
