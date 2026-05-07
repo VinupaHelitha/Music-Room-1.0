@@ -11,11 +11,13 @@ const emailPort = process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : unde
 const emailSecure = process.env.EMAIL_SECURE === 'true';
 const emailRequireTLS = process.env.EMAIL_REQUIRE_TLS === 'true';
 const emailFrom = process.env.EMAIL_FROM || emailUser;
+const isPlaceholderEmailFrom = emailFrom?.includes('yourdomain.com');
+const effectiveEmailFrom = isPlaceholderEmailFrom ? emailUser : emailFrom;
 
-const isEmailConfigValid = Boolean(emailUser && emailPassword && emailFrom && (emailHost || emailService));
+const isEmailConfigValid = Boolean(emailUser && emailPassword && (emailHost || emailService));
 
 if (!isEmailConfigValid) {
-  console.warn('Email configuration is incomplete. Set EMAIL_USER, EMAIL_PASSWORD, and EMAIL_FROM (or EMAIL_USER).');
+  console.warn('Email configuration is incomplete. Set EMAIL_USER and EMAIL_PASSWORD. Email delivery is disabled until these are configured.');
 }
 
 const transportConfig = emailHost
@@ -41,14 +43,9 @@ const transporter = nodemailer.createTransport(transportConfig);
 
 export const verifyEmailTransporter = async () => {
   if (!isEmailConfigValid) {
-    const errorMessage = 'Invalid email transporter configuration';
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn(`${errorMessage}. Running in development will log email codes to the console.`);
-      return { success: true, warning: 'Email disabled in development; codes will be logged.' };
-    }
-
-    console.error(errorMessage);
-    return { success: false, error: errorMessage };
+    const warningMessage = 'Invalid email transporter configuration. Email delivery is disabled.';
+    console.warn(`${warningMessage} Email codes will be logged instead of sent.`);
+    return { success: true, warning: 'Email delivery disabled; codes will be logged.' };
   }
 
   try {
@@ -74,7 +71,7 @@ export const generateVerificationCode = () => {
 export const sendVerificationEmail = async (email, name, code) => {
   try {
     const mailOptions = {
-      from: emailFrom,
+      from: effectiveEmailFrom,
       to: email,
       subject: 'Music Room - Email Verification',
       text: `Welcome to Music Room, ${name}!\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes. If you did not sign up, ignore this email.`,
@@ -101,14 +98,9 @@ export const sendVerificationEmail = async (email, name, code) => {
     };
 
     if (!isEmailConfigValid) {
-      const errorMessage = 'Email credentials are not configured';
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`DEV EMAIL: ${mailOptions.subject} -> ${email} | code: ${code}`);
-        console.log('Email body:', mailOptions.text);
-        return { success: true, warning: 'Email logging enabled for development' };
-      }
-      console.error('Email send error:', errorMessage);
-      return { success: false, error: errorMessage };
+      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
+      console.log('Email body:', mailOptions.text);
+      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
     }
 
     await transporter.sendMail(mailOptions);
@@ -125,7 +117,7 @@ export const sendVerificationEmail = async (email, name, code) => {
 export const sendPasswordResetEmail = async (email, name, code) => {
   try {
     const mailOptions = {
-      from: emailFrom,
+      from: effectiveEmailFrom,
       to: email,
       subject: 'Music Room - Password Reset',
       text: `Password reset request for Music Room. Your reset code is: ${code}. This code expires in 15 minutes. If you did not request this, ignore this email.`,
@@ -152,14 +144,9 @@ export const sendPasswordResetEmail = async (email, name, code) => {
     };
 
     if (!isEmailConfigValid) {
-      const errorMessage = 'Email credentials are not configured';
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`DEV EMAIL: ${mailOptions.subject} -> ${email} | code: ${code}`);
-        console.log('Email body:', mailOptions.text);
-        return { success: true, warning: 'Email logging enabled for development' };
-      }
-      console.error('Email send error:', errorMessage);
-      return { success: false, error: errorMessage };
+      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
+      console.log('Email body:', mailOptions.text);
+      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
     }
 
     await transporter.sendMail(mailOptions);
@@ -173,7 +160,7 @@ export const sendPasswordResetEmail = async (email, name, code) => {
 export const sendDeleteAccountEmail = async (email, name, code) => {
   try {
     const mailOptions = {
-      from: emailFrom,
+      from: effectiveEmailFrom,
       to: email,
       subject: 'Music Room - Account Deletion Request',
       text: `A request to delete your Music Room account was received. Your deletion code is: ${code}. This code expires in 15 minutes. If you did not request this, ignore this email.`,
@@ -200,14 +187,9 @@ export const sendDeleteAccountEmail = async (email, name, code) => {
     };
 
     if (!isEmailConfigValid) {
-      const errorMessage = 'Email credentials are not configured';
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`DEV EMAIL: ${mailOptions.subject} -> ${email} | code: ${code}`);
-        console.log('Email body:', mailOptions.text);
-        return { success: true, warning: 'Email logging enabled for development' };
-      }
-      console.error('Email send error:', errorMessage);
-      return { success: false, error: errorMessage };
+      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
+      console.log('Email body:', mailOptions.text);
+      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
     }
 
     await transporter.sendMail(mailOptions);
