@@ -1,0 +1,14 @@
+{
+  "name": "music-room",
+  "version": "1.0.0",
+  "description": "Music Room - Share Music & Lyrics Together",
+  "type": "module",
+  "scripts": {
+    "build": "cd backend && npm install && npm run build && cd ..",
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev"
+  },
+  "keywords": ["music", "room", "socket.io"],
+  "author": "VinupaHelitha",
+  "license": "MIT"
+}
