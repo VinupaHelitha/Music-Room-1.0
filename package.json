@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Music Room - Share Music & Lyrics Together",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "cd backend && npm install && npm run build && cd ..",
     "start": "cd backend && npm start",
