@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { useRoomStore } from '../store/roomStore';
 import LyricsDisplay from '../components/LyricsDisplay';
 import MusicPlayer from '../components/MusicPlayer';
+import ConnectServices from '../components/ConnectServices';
 import './RoomPage.css';
 
 export default function RoomPage() {
@@ -184,10 +185,26 @@ export default function RoomPage() {
     }
   };
 
-  const handlePlaySong = (song) => {
+  const handlePlaySong = async (song) => {
+    let songToPlay = song;
+    // Non-YouTube sources only have 30-second previews — find the YouTube version instead
+    if (song.source !== 'youtube') {
+      try {
+        const res = await axios.get('/api/music/search/youtube', {
+          params: { q: `${song.artist} ${song.title}` }
+        });
+        const ytResult = res.data.results?.[0];
+        if (ytResult) {
+          // Keep original clean title/artist; use YouTube for full-length playback
+          songToPlay = { ...ytResult, title: song.title, artist: song.artist, thumbnail: song.thumbnail || ytResult.thumbnail };
+        }
+      } catch (e) {
+        console.error('YouTube fallback search failed, playing original');
+      }
+    }
     if (socket) {
-      socket.emit('play-song', { roomId, song });
-      setCurrentSong(song);
+      socket.emit('play-song', { roomId, song: songToPlay });
+      setCurrentSong(songToPlay);
       setIsPlaying(true);
     }
   };
@@ -488,6 +505,8 @@ export default function RoomPage() {
               </div>
             )}
           </div>
+
+          <ConnectServices onPlaySong={handlePlaySong} />
 
           <div className="members-section card">
             <h3>👥 Room Members</h3>

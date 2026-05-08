@@ -7,6 +7,7 @@ import DeleteAccountPage from './pages/DeleteAccountPage';
 import DashboardPage from './pages/DashboardPage';
 import RoomPage from './pages/RoomPage';
 import JoinRoomPage from './pages/JoinRoomPage';
+import OAuthCallback from './pages/OAuthCallback';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -44,6 +45,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/" element={token ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
       </Routes>
     </Router>

@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import roomRoutes from './routes/rooms.js';
 import musicRoutes from './routes/music.js';
 import lyricsRoutes from './routes/lyrics.js';
+import connectRoutes from './routes/connect.js';
 import { initializeDatabase, getDatabase } from './db/init.js';
 import { authenticateToken } from './middleware/auth.js';
 import { verifyEmailTransporter } from './services/emailService.js';
@@ -64,6 +65,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rooms', authenticateToken, roomRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/lyrics', lyricsRoutes);
+app.use('/api/connect', connectRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

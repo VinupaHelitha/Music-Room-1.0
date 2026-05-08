@@ -16,7 +16,7 @@ export default function LyricsDisplay({ lyrics, activeLineIndex = 0, onLineSelec
 
       // Scroll so active line is centered in the container
       const scrollTop = elementOffsetTop - (containerHeight / 2) + (elementHeight / 2);
-      container.scrollTop = Math.max(0, scrollTop);
+      container.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
     }
   }, [activeLineIndex]);
 
