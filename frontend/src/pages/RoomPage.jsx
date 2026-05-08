@@ -282,11 +282,24 @@ export default function RoomPage() {
 
   const handleTimeUpdate = (time, duration) => {
     if (!lyricsLines.length || duration === 0) return;
-    const nextIndex = Math.min(
-      Math.floor((time / duration) * lyricsLines.length),
-      lyricsLines.length - 1
+    // Only map time against non-empty lines so blank verse-break lines don't waste sync time
+    const contentIndices = lyricsLines.reduce((acc, line, i) => {
+      if (line.trim()) acc.push(i);
+      return acc;
+    }, []);
+    if (!contentIndices.length) return;
+    const pos = Math.min(
+      Math.floor((time / duration) * contentIndices.length),
+      contentIndices.length - 1
     );
-    setActiveLyricLine(nextIndex);
+    setActiveLyricLine(contentIndices[pos]);
+  };
+
+  const handleSongEnded = () => {
+    if (socket) {
+      socket.emit('play-next', roomId);
+    }
+    setIsPlaying(false);
   };
 
   const handleLineSelect = (index) => {
@@ -345,6 +358,7 @@ export default function RoomPage() {
                   audioRef={audioRef}
                   toggleMute={() => setAudioMuted((prev) => !prev)}
                   audioMuted={audioMuted}
+                  onSongEnded={handleSongEnded}
                 />
               </div>
             ) : (

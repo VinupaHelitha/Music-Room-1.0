@@ -11,100 +11,115 @@ export default function MusicPlayer({
   toggleMute,
   onTimeUpdate,
   onLoadedMetadata,
+  onSongEnded,
   audioRef
 }) {
-  const playerRef = useRef(null);
-  const windowRef = useRef(null);
-  const isYouTube = song?.source === 'youtube' || song?.preview_url?.includes('youtube');
+  const playerContainerRef = useRef(null);
+  const ytPlayerRef = useRef(null);
+  // Always keep a fresh reference to onSongEnded so the YT closure never goes stale
+  const onSongEndedRef = useRef(onSongEnded);
+  useEffect(() => { onSongEndedRef.current = onSongEnded; }, [onSongEnded]);
 
-  // YouTube API setup (only once)
+  const isYouTube = song?.source === 'youtube';
+
+  // Load YouTube IFrame API script once
   useEffect(() => {
-    if (!isYouTube) return;
-
-    if (!window.YT) {
+    if (!document.getElementById('yt-api-script')) {
       const tag = document.createElement('script');
+      tag.id = 'yt-api-script';
       tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-      windowRef.current = window;
+      document.head.appendChild(tag);
     }
-  }, [isYouTube]);
+  }, []);
 
+  // Create / recreate YouTube player whenever the video ID changes
   useEffect(() => {
-    if (!isYouTube || !window.YT || !song?.id) return;
+    if (!isYouTube || !song?.id) return;
 
-    const player = new window.YT.Player(playerRef.current, {
-      height: '0',
-      width: '0',
-      videoId: song.id,
-      playerVars: {
-        controls: 0,
-        autoplay: 0,
-        modestbranding: 1
-      },
-      events: {
-        onReady: () => {
-          if (isPlaying) {
-            player.playVideo();
-          }
-        },
-        onStateChange: (event) => {
-          if (event.data === 1) {
-            setIsPlaying(true);
-          } else if (event.data === 2) {
-            setIsPlaying(false);
+    const createPlayer = () => {
+      if (!playerContainerRef.current) return;
+
+      // Destroy old player first
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch (e) {}
+        ytPlayerRef.current = null;
+      }
+
+      // YT replaces the target element with an iframe — give it a fresh div each time
+      playerContainerRef.current.innerHTML = '';
+      const div = document.createElement('div');
+      playerContainerRef.current.appendChild(div);
+
+      ytPlayerRef.current = new window.YT.Player(div, {
+        videoId: song.id,
+        height: '0',
+        width: '0',
+        playerVars: { autoplay: 1, controls: 0, modestbranding: 1 },
+        events: {
+          onReady: (e) => {
+            muted ? e.target.mute() : e.target.unMute();
+            e.target.playVideo();
+          },
+          onStateChange: (event) => {
+            const S = window.YT.PlayerState;
+            if (event.data === S.PLAYING) {
+              setIsPlaying(true);
+            } else if (event.data === S.PAUSED) {
+              setIsPlaying(false);
+            } else if (event.data === S.ENDED) {
+              setIsPlaying(false);
+              onSongEndedRef.current?.();
+            }
           }
         }
-      }
-    });
-
-    // Update time every 100ms for YouTube
-    const interval = setInterval(() => {
-      if (player && player.getCurrentTime) {
-        const currentTime = player.getCurrentTime();
-        const duration = player.getDuration();
-        onTimeUpdate?.(currentTime, duration);
-      }
-    }, 100);
-
-    return () => {
-      clearInterval(interval);
+      });
     };
-  }, [isYouTube, song?.id, isPlaying, setIsPlaying, onTimeUpdate]);
+
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        prev?.();
+        createPlayer();
+      };
+    }
+
+    // Poll current time for lyrics sync
+    const interval = setInterval(() => {
+      const p = ytPlayerRef.current;
+      if (p?.getCurrentTime) {
+        try { onTimeUpdate?.(p.getCurrentTime(), p.getDuration() || 0); } catch (e) {}
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [song?.id, isYouTube]);
+
+  // Sync play / pause state → YT player
+  useEffect(() => {
+    if (!isYouTube || !ytPlayerRef.current) return;
+    try {
+      isPlaying ? ytPlayerRef.current.playVideo() : ytPlayerRef.current.pauseVideo();
+    } catch (e) {}
+  }, [isPlaying, isYouTube]);
+
+  // Sync mute state → YT player
+  useEffect(() => {
+    if (!isYouTube || !ytPlayerRef.current) return;
+    try {
+      muted ? ytPlayerRef.current.mute() : ytPlayerRef.current.unMute();
+    } catch (e) {}
+  }, [muted, isYouTube]);
 
   const handlePlayPause = () => {
-    if (isYouTube) {
-      const player = window.YT?.Player;
-      if (!player) return;
-
-      if (!isPlaying) {
-        playerRef.current?.playVideo?.();
-        socket?.emit('play-song', { roomId, song });
-        setIsPlaying(true);
-      } else {
-        playerRef.current?.pauseVideo?.();
-        socket?.emit('pause-song', roomId);
-        setIsPlaying(false);
-      }
+    if (isPlaying) {
+      socket?.emit('pause-song', roomId);
+      setIsPlaying(false);
     } else {
-      if (!isPlaying) {
-        socket?.emit('play-song', { roomId, song });
-        setIsPlaying(true);
-      } else {
-        socket?.emit('pause-song', roomId);
-        setIsPlaying(false);
-      }
+      socket?.emit('play-song', { roomId, song });
+      setIsPlaying(true);
     }
-  };
-
-  const handleTimeUpdate = (event) => {
-    const currentTime = event.target.currentTime;
-    const duration = event.target.duration || 0;
-    onTimeUpdate?.(currentTime, duration);
-  };
-
-  const handleLoadedMetadata = (event) => {
-    onLoadedMetadata?.(event.target.duration);
   };
 
   return (
@@ -123,17 +138,18 @@ export default function MusicPlayer({
       </div>
 
       {isYouTube ? (
-        <div id="yt-player" ref={playerRef} style={{ display: 'none' }}></div>
+        <div ref={playerContainerRef} style={{ display: 'none' }} />
       ) : song?.preview_url ? (
         <audio
           ref={audioRef}
           src={song.preview_url}
           autoPlay={isPlaying}
           muted={muted}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
+          onTimeUpdate={(e) => onTimeUpdate?.(e.target.currentTime, e.target.duration || 0)}
+          onLoadedMetadata={(e) => onLoadedMetadata?.(e.target.duration)}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
+          onEnded={onSongEnded}
           controls
           style={{ width: '100%', marginTop: '16px' }}
         />
