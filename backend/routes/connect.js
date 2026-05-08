@@ -8,8 +8,9 @@ const router = express.Router();
 
 // In production (Railway), frontend and backend share the same URL.
 // FRONTEND_URL is the deployed app URL; BACKEND_URL can override for local dev.
-const APP_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:5000';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+// Strip trailing slash to prevent double-slash in callback URIs
+const APP_URL = (process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:5000').replace(/\/+$/, '');
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 const SPOTIFY_CALLBACK = `${APP_URL}/api/connect/spotify/callback`;
 const YOUTUBE_CALLBACK = `${APP_URL}/api/connect/youtube/callback`;
