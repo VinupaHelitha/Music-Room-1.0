@@ -34,6 +34,20 @@ router.post('/create', async (req, res) => {
   }
 });
 
+// Get user's rooms — must be defined before /:roomId to avoid being swallowed by the param route
+router.get('/user/my-rooms', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const db = getDatabase();
+
+    const result = await db.query('SELECT * FROM rooms WHERE creator_id = $1 ORDER BY created_at DESC', [userId]);
+    res.json(result.rows || []);
+  } catch (error) {
+    console.error('Get user rooms error:', error);
+    res.status(500).json({ error: 'Failed to fetch rooms' });
+  }
+});
+
 // Get room details
 router.get('/:roomId', async (req, res) => {
   try {
@@ -96,20 +110,6 @@ router.post('/:roomId/toggle-audio', async (req, res) => {
   } catch (error) {
     console.error('Toggle audio error:', error);
     res.status(500).json({ error: 'Failed to toggle room audio' });
-  }
-});
-
-// Get user's rooms
-router.get('/user/my-rooms', async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const db = getDatabase();
-
-    const result = await db.query('SELECT * FROM rooms WHERE creator_id = $1 ORDER BY created_at DESC', [userId]);
-    res.json(result.rows || []);
-  } catch (error) {
-    console.error('Get user rooms error:', error);
-    res.status(500).json({ error: 'Failed to fetch rooms' });
   }
 });
 

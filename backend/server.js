@@ -21,10 +21,7 @@ const __dirname = path.dirname(__filename);
 const emailVerification = await verifyEmailTransporter();
 if (!emailVerification.success) {
   console.error('Email transporter could not be verified:', emailVerification.error);
-  if (process.env.NODE_ENV === 'production') {
-    console.error('Exiting because email is required in production. Set valid SMTP credentials.');
-    process.exit(1);
-  }
+  console.error('Email delivery is disabled. Verification codes will be logged to console.');
 }
 
 const app = express();
