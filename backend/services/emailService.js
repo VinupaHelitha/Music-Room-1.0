@@ -1,201 +1,89 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const emailUser = process.env.EMAIL_USER;
-const emailPassword = process.env.EMAIL_PASSWORD;
-const emailService = process.env.EMAIL_SERVICE || 'gmail';
-const emailHost = process.env.EMAIL_HOST;
-const emailPort = process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : undefined;
-const emailSecure = process.env.EMAIL_SECURE === 'true';
-const emailRequireTLS = process.env.EMAIL_REQUIRE_TLS === 'true';
-const emailFrom = process.env.EMAIL_FROM || emailUser;
-const isPlaceholderEmailFrom = emailFrom?.includes('yourdomain.com');
-const effectiveEmailFrom = isPlaceholderEmailFrom ? emailUser : emailFrom;
+const resendApiKey = process.env.RESEND_API_KEY || process.env.EMAIL_PASSWORD;
+const emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
-const isEmailConfigValid = Boolean(emailUser && emailPassword && (emailHost || emailService));
+const isConfigValid = Boolean(resendApiKey);
 
-if (!isEmailConfigValid) {
-  console.warn('Email configuration is incomplete. Set EMAIL_USER and EMAIL_PASSWORD. Email delivery is disabled until these are configured.');
+if (!isConfigValid) {
+  console.warn('No Resend API key found. Set RESEND_API_KEY or EMAIL_PASSWORD. Email delivery disabled.');
 }
 
-const transportConfig = emailHost
-  ? {
-      host: emailHost,
-      port: emailPort || 587,
-      secure: emailSecure,
-      auth: {
-        user: emailUser,
-        pass: emailPassword
-      },
-      requireTLS: emailRequireTLS
-    }
-  : {
-      service: emailService,
-      auth: {
-        user: emailUser,
-        pass: emailPassword
-      }
-    };
-
-const transporter = nodemailer.createTransport(transportConfig);
+const resend = isConfigValid ? new Resend(resendApiKey) : null;
 
 export const verifyEmailTransporter = async () => {
-  if (!isEmailConfigValid) {
-    const warningMessage = 'Invalid email transporter configuration. Email delivery is disabled.';
-    console.warn(`${warningMessage} Email codes will be logged instead of sent.`);
+  if (!isConfigValid) {
+    console.warn('Email configuration incomplete. Verification codes will be logged to console.');
     return { success: true, warning: 'Email delivery disabled; codes will be logged.' };
   }
-
-  try {
-    await transporter.verify();
-    console.log('Email transporter verified and ready to send messages');
-    return { success: true };
-  } catch (error) {
-    console.error('Email transporter verification failed:', error.message || error);
-    return { success: false, error: error.message || String(error) };
-  }
+  console.log('Email transporter (Resend HTTP API) configured and ready');
+  return { success: true };
 };
 
-/**
- * Generate a 6-digit random verification code
- */
 export const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-/**
- * Send verification code email
- */
-export const sendVerificationEmail = async (email, name, code) => {
+const sendEmail = async (to, subject, text, html) => {
+  if (!isConfigValid) {
+    console.warn(`EMAIL LOG: ${subject} -> ${to}`);
+    return { success: true, warning: 'Email logging only — no API key configured.' };
+  }
   try {
-    const mailOptions = {
-      from: effectiveEmailFrom,
-      to: email,
-      subject: 'Music Room - Email Verification',
-      text: `Welcome to Music Room, ${name}!\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes. If you did not sign up, ignore this email.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; color: white;">
-            <h1 style="margin: 0;">🎵 Music Room</h1>
-          </div>
-          <div style="padding: 30px; background: #f9f9f9;">
-            <h2>Welcome to Music Room, ${name}!</h2>
-            <p>Thank you for signing up. Please verify your email address to complete your account setup.</p>
-            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-              <p style="font-size: 14px; color: #666;">Your verification code is:</p>
-              <h1 style="font-size: 48px; color: #667eea; letter-spacing: 8px; margin: 20px 0;">${code}</h1>
-              <p style="font-size: 12px; color: #999;">This code will expire in 15 minutes</p>
-            </div>
-            <p>If you didn't sign up for this account, please ignore this email.</p>
-          </div>
-          <div style="padding: 20px; background: #333; color: white; text-align: center; font-size: 12px;">
-            <p>&copy; 2024 Music Room. All rights reserved.</p>
-          </div>
-        </div>
-      `
-    };
-
-    if (!isEmailConfigValid) {
-      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
-      console.log('Email body:', mailOptions.text);
-      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
+    const { error } = await resend.emails.send({ from: emailFrom, to, subject, text, html });
+    if (error) {
+      console.error('Resend error:', error);
+      return { success: false, error: error.message };
     }
-
-    await transporter.sendMail(mailOptions);
     return { success: true };
-  } catch (error) {
-    console.error('Email send error:', error);
-    return { success: false, error: error.message };
+  } catch (err) {
+    console.error('Email send error:', err);
+    return { success: false, error: err.message };
   }
 };
 
-/**
- * Send password reset email
- */
+export const sendVerificationEmail = async (email, name, code) => {
+  return sendEmail(
+    email,
+    'Music Room - Email Verification',
+    `Welcome to Music Room, ${name}!\n\nYour verification code is: ${code}\n\nThis code expires in 15 minutes.`,
+    `<div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px">
+      <h2>🎵 Music Room</h2>
+      <p>Welcome, <strong>${name}</strong>! Please verify your email address.</p>
+      <p>Your verification code is:</p>
+      <h1 style="letter-spacing:8px;color:#6366f1;font-size:36px">${code}</h1>
+      <p style="color:#888">This code expires in 15 minutes.</p>
+    </div>`
+  );
+};
+
 export const sendPasswordResetEmail = async (email, name, code) => {
-  try {
-    const mailOptions = {
-      from: effectiveEmailFrom,
-      to: email,
-      subject: 'Music Room - Password Reset',
-      text: `Password reset request for Music Room. Your reset code is: ${code}. This code expires in 15 minutes. If you did not request this, ignore this email.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center; color: white;">
-            <h1 style="margin: 0;">🎵 Music Room</h1>
-          </div>
-          <div style="padding: 30px; background: #f9f9f9;">
-            <h2>Password Reset Request</h2>
-            <p>We received a request to reset your password. Use the code below to reset your password.</p>
-            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-              <p style="font-size: 14px; color: #666;">Your password reset code is:</p>
-              <h1 style="font-size: 48px; color: #667eea; letter-spacing: 8px; margin: 20px 0;">${code}</h1>
-              <p style="font-size: 12px; color: #999;">This code will expire in 15 minutes</p>
-            </div>
-            <p>If you didn't request a password reset, please ignore this email and your password will remain unchanged.</p>
-          </div>
-          <div style="padding: 20px; background: #333; color: white; text-align: center; font-size: 12px;">
-            <p>&copy; 2024 Music Room. All rights reserved.</p>
-          </div>
-        </div>
-      `
-    };
-
-    if (!isEmailConfigValid) {
-      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
-      console.log('Email body:', mailOptions.text);
-      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
-    }
-
-    await transporter.sendMail(mailOptions);
-    return { success: true };
-  } catch (error) {
-    console.error('Email send error:', error);
-    return { success: false, error: error.message };
-  }
+  return sendEmail(
+    email,
+    'Music Room - Password Reset',
+    `Password reset code for Music Room: ${code}. Expires in 15 minutes.`,
+    `<div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px">
+      <h2>🎵 Music Room</h2>
+      <p>Hi <strong>${name}</strong>, here is your password reset code:</p>
+      <h1 style="letter-spacing:8px;color:#6366f1;font-size:36px">${code}</h1>
+      <p style="color:#888">This code expires in 15 minutes.</p>
+    </div>`
+  );
 };
 
 export const sendDeleteAccountEmail = async (email, name, code) => {
-  try {
-    const mailOptions = {
-      from: effectiveEmailFrom,
-      to: email,
-      subject: 'Music Room - Account Deletion Request',
-      text: `A request to delete your Music Room account was received. Your deletion code is: ${code}. This code expires in 15 minutes. If you did not request this, ignore this email.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%); padding: 20px; text-align: center; color: white;">
-            <h1 style="margin: 0;">🎵 Music Room</h1>
-          </div>
-          <div style="padding: 30px; background: #f9f9f9;">
-            <h2>Account Deletion Request</h2>
-            <p>We received a request to delete your Music Room account. Use the verification code below to confirm deletion.</p>
-            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-              <p style="font-size: 14px; color: #666;">Your deletion verification code is:</p>
-              <h1 style="font-size: 48px; color: #e53e3e; letter-spacing: 8px; margin: 20px 0;">${code}</h1>
-              <p style="font-size: 12px; color: #999;">This code will expire in 15 minutes</p>
-            </div>
-            <p>If you did not request to delete your account, please ignore this email and your account will remain unchanged.</p>
-          </div>
-          <div style="padding: 20px; background: #333; color: white; text-align: center; font-size: 12px;">
-            <p>&copy; 2024 Music Room. All rights reserved.</p>
-          </div>
-        </div>
-      `
-    };
-
-    if (!isEmailConfigValid) {
-      console.warn(`EMAIL LOG: ${mailOptions.subject} -> ${email} | code: ${code}`);
-      console.log('Email body:', mailOptions.text);
-      return { success: true, warning: 'Email logging enabled because SMTP is not configured.' };
-    }
-
-    await transporter.sendMail(mailOptions);
-    return { success: true };
-  } catch (error) {
-    console.error('Email send error:', error);
-    return { success: false, error: error.message };
-  }
+  return sendEmail(
+    email,
+    'Music Room - Account Deletion Request',
+    `Your account deletion verification code: ${code}. Expires in 15 minutes.`,
+    `<div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px">
+      <h2>🎵 Music Room</h2>
+      <p>Hi <strong>${name}</strong>, your account deletion code is:</p>
+      <h1 style="letter-spacing:8px;color:#ef4444;font-size:36px">${code}</h1>
+      <p style="color:#888">This code expires in 15 minutes.</p>
+    </div>`
+  );
 };
