@@ -6,16 +6,13 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// In production (Railway), frontend and backend share the same URL.
-// FRONTEND_URL is the deployed app URL; BACKEND_URL can override for local dev.
-// Strip trailing slash to prevent double-slash in callback URIs
 const APP_URL = (process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:5000').replace(/\/+$/, '');
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 const SPOTIFY_CALLBACK = `${APP_URL}/api/connect/spotify/callback`;
 const YOUTUBE_CALLBACK = `${APP_URL}/api/connect/youtube/callback`;
 
-// ─── Spotify ────────────────────────────────────────────────────────────────
+// ─── Spotify OAuth ────────────────────────────────────────────────────────────
 
 router.get('/spotify', (req, res) => {
   if (!process.env.SPOTIFY_CLIENT_ID) {
@@ -48,11 +45,18 @@ router.get('/spotify/callback', async (req, res) => {
     );
     const { access_token, refresh_token } = tokenRes.data;
 
-    const profileRes = await axios.get('https://api.spotify.com/v1/me', {
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
-    const spotifyId = profileRes.data.id;
-    const isPremium = profileRes.data.product === 'premium';
+    // Profile lookup is optional — don't fail the whole flow if it errors
+    let spotifyId = 'unknown';
+    let isPremium = false;
+    try {
+      const profileRes = await axios.get('https://api.spotify.com/v1/me', {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+      spotifyId = profileRes.data.id || 'unknown';
+      isPremium = profileRes.data.product === 'premium';
+    } catch (profileErr) {
+      console.warn('Could not fetch Spotify profile (non-fatal):', profileErr.message);
+    }
 
     const db = getDatabase();
     await db.query(
@@ -69,7 +73,7 @@ router.get('/spotify/callback', async (req, res) => {
   }
 });
 
-// ─── YouTube / Google ────────────────────────────────────────────────────────
+// ─── YouTube / Google OAuth ───────────────────────────────────────────────────
 
 router.get('/youtube', (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) {
@@ -109,11 +113,17 @@ router.get('/youtube/callback', async (req, res) => {
     );
     const { access_token, refresh_token } = tokenRes.data;
 
-    const channelRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
-      params: { part: 'id', mine: true },
-      headers: { Authorization: `Bearer ${access_token}` }
-    });
-    const channelId = channelRes.data.items?.[0]?.id || 'unknown';
+    // Channel lookup is optional — tokens are what matter, channel ID is just metadata
+    let channelId = 'unknown';
+    try {
+      const channelRes = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+        params: { part: 'id', mine: true },
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+      channelId = channelRes.data.items?.[0]?.id || 'unknown';
+    } catch (chErr) {
+      console.warn('Could not fetch YouTube channel ID (non-fatal):', chErr.message);
+    }
 
     const db = getDatabase();
     await db.query(
@@ -146,6 +156,60 @@ router.get('/status', authenticateToken, async (req, res) => {
     res.json(connected);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch connection status' });
+  }
+});
+
+// Search Spotify using connected account token (falls back to client credentials)
+router.get('/spotify/search', authenticateToken, async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'Query required' });
+
+  let accessToken = null;
+
+  // Try connected account token first
+  try {
+    const db = getDatabase();
+    const result = await db.query(
+      'SELECT access_token FROM user_music_accounts WHERE user_id = $1 AND service = $2',
+      [req.user.userId, 'spotify']
+    );
+    if (result.rows[0]) accessToken = result.rows[0].access_token;
+  } catch (e) {}
+
+  // Fall back to client credentials
+  if (!accessToken && process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET) {
+    try {
+      const auth = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64');
+      const tokenRes = await axios.post(
+        'https://accounts.spotify.com/api/token',
+        'grant_type=client_credentials',
+        { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      accessToken = tokenRes.data.access_token;
+    } catch (e) {}
+  }
+
+  if (!accessToken) return res.status(503).json({ error: 'Spotify not available' });
+
+  try {
+    const searchRes = await axios.get('https://api.spotify.com/v1/search', {
+      params: { q, type: 'track', limit: 15 },
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const results = searchRes.data.tracks.items.map(track => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artists[0].name,
+      album: track.album.name,
+      thumbnail: track.album.images[0]?.url,
+      duration: Math.floor(track.duration_ms / 1000),
+      preview_url: track.preview_url,
+      source: 'spotify'
+    }));
+    res.json({ results });
+  } catch (err) {
+    console.error('Spotify search error:', err.message);
+    res.status(500).json({ error: 'Spotify search failed' });
   }
 });
 

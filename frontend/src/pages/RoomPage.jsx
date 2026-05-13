@@ -37,6 +37,7 @@ export default function RoomPage() {
   const [roomAudioEnabled, setRoomAudioEnabled] = useState(true);
   const [karaokeFilter, setKaraokeFilter] = useState('all');
   const [audioMuted, setAudioMuted] = useState(false);
+  const [connectedServices, setConnectedServices] = useState({});
   const [activeLyricLine, setActiveLyricLine] = useState(0);
   const [lyricsLines, setLyricsLines] = useState([]);
   const audioRef = useRef(null);
@@ -50,6 +51,12 @@ export default function RoomPage() {
       setShareLink(`${baseUrl}/join/${currentRoom.room_code}`);
     }
   }, [currentRoom?.room_code]);
+
+  useEffect(() => {
+    axios.get('/api/connect/status', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setConnectedServices(r.data))
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     if (lyrics?.lyrics) {
@@ -167,17 +174,33 @@ export default function RoomPage() {
     setError('');
 
     try {
-      const filterQuery =
-        karaokeFilter === 'karaoke'
-          ? `${query} karaoke`
-          : karaokeFilter === 'instrumental'
-          ? `${query} instrumental`
-          : query;
+      let results = [];
 
-      const response = await axios.get('/api/music/search', {
-        params: { q: filterQuery, source: 'all' }
-      });
-      setSearchResults(response.data.results);
+      if (karaokeFilter === 'my-spotify') {
+        const response = await axios.get('/api/connect/spotify/search', {
+          params: { q: query },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        results = response.data.results;
+      } else if (karaokeFilter === 'my-youtube') {
+        const response = await axios.get('/api/music/search/youtube', {
+          params: { q: query }
+        });
+        results = response.data.results;
+      } else {
+        const filterQuery =
+          karaokeFilter === 'karaoke'
+            ? `${query} karaoke`
+            : karaokeFilter === 'instrumental'
+            ? `${query} instrumental`
+            : query;
+        const response = await axios.get('/api/music/search', {
+          params: { q: filterQuery, source: 'all' }
+        });
+        results = response.data.results;
+      }
+
+      setSearchResults(results);
     } catch (err) {
       setError('Failed to search songs');
     } finally {
@@ -190,12 +213,18 @@ export default function RoomPage() {
     // Non-YouTube sources only have 30-second previews — find the YouTube version instead
     if (song.source !== 'youtube') {
       try {
-        const res = await axios.get('/api/music/search/youtube', {
+        let res = await axios.get('/api/music/search/youtube', {
           params: { q: `${song.artist} ${song.title}` }
         });
-        const ytResult = res.data.results?.[0];
+        let ytResult = res.data.results?.[0];
+        // Broaden search to just title if specific query returned nothing
+        if (!ytResult) {
+          res = await axios.get('/api/music/search/youtube', {
+            params: { q: song.title }
+          });
+          ytResult = res.data.results?.[0];
+        }
         if (ytResult) {
-          // Keep original clean title/artist; use YouTube for full-length playback
           songToPlay = { ...ytResult, title: song.title, artist: song.artist, thumbnail: song.thumbnail || ytResult.thumbnail };
         }
       } catch (e) {
@@ -424,6 +453,8 @@ export default function RoomPage() {
                   <option value="all">All songs</option>
                   <option value="karaoke">Karaoke</option>
                   <option value="instrumental">Instrumental</option>
+                  {connectedServices.spotify && <option value="my-spotify">🟢 My Spotify</option>}
+                  {connectedServices.youtube && <option value="my-youtube">🔴 My YouTube</option>}
                 </select>
               </div>
               <button type="submit" className="btn-primary" disabled={loading}>
